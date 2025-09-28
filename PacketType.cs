@@ -202,18 +202,18 @@ namespace NCShark
         {
             switch (packetType)
             {
-                case PacketType.Login: return 0xFF4CAF50; // Verde
-                case PacketType.Gameplay: return 0xFF2196F3; // Azul
-                case PacketType.Chat: return 0xFFFF9800; // Laranja
-                case PacketType.Inventory: return 0xFF9C27B0; // Roxo
-                case PacketType.Combat: return 0xFFF44336; // Vermelho
-                case PacketType.Movement: return 0xFF00BCD4; // Ciano
-                case PacketType.Quest: return 0xFF795548; // Marrom
-                case PacketType.Trade: return 0xFF607D8B; // Azul acinzentado
-                case PacketType.Guild: return 0xFFE91E63; // Rosa
-                case PacketType.System: return 0xFF9E9E9E; // Cinza
-                case PacketType.Error: return 0xFF000000; // Preto
-                default: return 0xFF757575; // Cinza escuro
+                case PacketType.Login: return unchecked((int)0xFF4CAF50); // Verde
+                case PacketType.Gameplay: return unchecked((int)0xFF2196F3); // Azul
+                case PacketType.Chat: return unchecked((int)0xFFFF9800); // Laranja
+                case PacketType.Inventory: return unchecked((int)0xFF9C27B0); // Roxo
+                case PacketType.Combat: return unchecked((int)0xFFF44336); // Vermelho
+                case PacketType.Movement: return unchecked((int)0xFF00BCD4); // Ciano
+                case PacketType.Quest: return unchecked((int)0xFF795548); // Marrom
+                case PacketType.Trade: return unchecked((int)0xFF607D8B); // Azul acinzentado
+                case PacketType.Guild: return unchecked((int)0xFFE91E63); // Rosa
+                case PacketType.System: return unchecked((int)0xFF9E9E9E); // Cinza
+                case PacketType.Error: return unchecked((int)0xFF000000); // Preto
+                default: return unchecked((int)0xFF757575); // Cinza escuro
             }
         }
     }

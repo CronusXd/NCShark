@@ -328,7 +328,7 @@ namespace NCShark
                 var sessions = mainForm.GetActiveSessions();
                 foreach (var session in sessions)
                 {
-                    lstActiveSessions.Items.Add($"Session: {session.Text} ({session.mPackets?.Count ?? 0} packets)");
+                    lstActiveSessions.Items.Add($"Session: {session.Text} ({session.Packets?.Count ?? 0} packets)");
                 }
             }
         }

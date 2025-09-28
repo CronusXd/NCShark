@@ -68,6 +68,7 @@ namespace NCShark
         public ListView ListView { get { return mPacketList; } }
         public byte Locale { get { return mLocale; } }
         public List<Pair<bool, ushort>> Opcodes { get { return mOpcodes; } }
+        public List<NCPacket> Packets { get { return mPackets; } }
 
         public bool Saved { get; private set; }
 
