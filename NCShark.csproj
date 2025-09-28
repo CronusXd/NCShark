@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -125,7 +125,14 @@
   <ItemGroup>
     <Compile Include="AbstractPacket.cs" />
     <Compile Include="AppUpdates.cs" />
+    <Compile Include="CaptureControlPanel.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Config.cs" />
+    <Compile Include="FilterRule.cs" />
+    <Compile Include="FilterRuleForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="DataForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -274,6 +281,8 @@
     <Compile Include="Locales.cs" />
     <Compile Include="NCPacket.cs" />
     <Compile Include="NCStream.cs" />
+    <Compile Include="PacketFilter.cs" />
+    <Compile Include="PacketType.cs" />
     <Compile Include="OutputForm.cs">
       <SubType>Form</SubType>
     </Compile>

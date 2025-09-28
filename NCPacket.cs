@@ -1,4 +1,4 @@
-﻿//NCShark - By AlSch092 @ Github, thanks to @Diamondo25 for MapleShark
+//NCShark - By AlSch092 @ Github, thanks to @Diamondo25 for MapleShark
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -25,6 +25,13 @@ namespace NCShark
         public uint PreDecodeIV { get; private set; }
         public uint PostDecodeIV { get; private set; }
 
+        // Novas propriedades para classificação e filtros
+        public PacketType PacketType { get; private set; }
+        public string Tag { get; set; } = "";
+        public bool IsHighlighted { get; set; } = false;
+        public bool IsIgnored { get; set; } = false;
+        public bool IsModified { get; set; } = false;
+
         internal NCPacket(DateTime pTimestamp, bool pOutbound, ushort pOpcode, string pName, byte[] pBuffer)
             : base(new string[] {
                 pTimestamp.ToString("yyyy-MM-dd HH:mm:ss.fff"),
@@ -35,10 +42,11 @@ namespace NCShark
         {
             Timestamp = pTimestamp;
             Outbound = pOutbound;
-
             Opcode = pOpcode;
             Buffer = pBuffer;
-
+            
+            // Classificar automaticamente o tipo de pacote
+            PacketType = PacketClassifier.ClassifyPacket(pOpcode, pBuffer, pOutbound);
         }
 
         internal NCPacket(DateTime pTimestamp, ushort pOpcode, string pName, byte[] pBuffer)
@@ -51,6 +59,9 @@ namespace NCShark
             Timestamp = pTimestamp;
             Opcode = pOpcode;
             Buffer = pBuffer;
+            
+            // Classificar automaticamente o tipo de pacote (assumindo inbound por padrão)
+            PacketType = PacketClassifier.ClassifyPacket(pOpcode, pBuffer, false);
         }
 
         public void Rewind() { Cursor = 0; }
