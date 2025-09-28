@@ -194,8 +194,7 @@ namespace NCShark
             {
                 Location = new Point(80, 22),
                 Size = new Size(80, 25),
-                Text = "",
-                PlaceholderText = "0x0000"
+                Text = "0x0000"
             };
 
             // Tipo de pacote

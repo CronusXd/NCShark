@@ -16,7 +16,7 @@ namespace NCShark
         public ushort Build { get; private set; }
         public ushort Locale { get; private set; }
         public ushort Opcode { get; private set; }
-        public new string Name { set { SubItems[4].Text = value; } }
+        public new string Name { get { return SubItems[4].Text; } set { SubItems[4].Text = value; } }
 
         public byte[] Buffer { get; private set; }
         public int Cursor { get; private set; }
