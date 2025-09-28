@@ -1,4 +1,4 @@
-﻿//NCShark - By AlSch092 @ Github, thanks to @Diamondo25 for MapleShark
+//NCShark - By AlSch092 @ Github, thanks to @Diamondo25 for MapleShark
 using SharpPcap;
 using SharpPcap.LibPcap;
 using PacketDotNet;
@@ -22,8 +22,14 @@ namespace NCShark
         private DataForm mDataForm = new DataForm();
         private StructureForm mStructureForm = new StructureForm();
         private PropertyForm mPropertyForm = new PropertyForm();
+        private CaptureControlPanel mCaptureControlPanel;
             
         private string[] _startupArguments = null;
+
+        // Sistema de filtros e captura universal
+        private FilterRuleManager filterRuleManager = new FilterRuleManager();
+        private bool universalCaptureMode = true;
+        private List<SessionForm> activeSessions = new List<SessionForm>();
 
         public MainForm(string[] startupArguments)
         {
@@ -31,6 +37,9 @@ namespace NCShark
             Text = "NCShark " + Program.AssemblyVersion + "By AlSch092 [Github] with special thanks to Diamondo25";
 
             _startupArguments = startupArguments;
+            
+            // Inicializar painel de controle de captura
+            mCaptureControlPanel = new CaptureControlPanel(this);
         }
 
         public SearchForm SearchForm { get { return mSearchForm; } }
@@ -44,11 +53,13 @@ namespace NCShark
         private SessionForm NewSession()
         {
             SessionForm session = new SessionForm();
+            AddActiveSession(session);
             return session;
         }
 
         public void CloseSession(SessionForm form)
         {
+            RemoveActiveSession(form);
             mDockPanel.Contents.Remove(form);
         }
 
@@ -111,7 +122,17 @@ namespace NCShark
                 mDevice.Open();
             }
 
-            mDevice.Filter = string.Format("tcp portrange {0}-{1}", Config.Instance.LowPort, Config.Instance.HighPort);
+            // Configurar filtro baseado no modo de captura
+            if (universalCaptureMode)
+            {
+                // Captura universal - capturar todo tráfego TCP
+                mDevice.Filter = "tcp";
+            }
+            else
+            {
+                // Modo original - apenas portas específicas
+                mDevice.Filter = string.Format("tcp portrange {0}-{1}", Config.Instance.LowPort, Config.Instance.HighPort);
+            }
         }
 
         private void MainForm_Load(object pSender, EventArgs pArgs)
@@ -127,12 +148,18 @@ namespace NCShark
 
             SetupAdapter();
 
+            // Inicializar sistema de filtros
+            filterRuleManager.LoadRules();
+            filterRuleManager.RuleApplied += OnFilterRuleApplied;
+
             mTimer.Enabled = true;
 
             mSearchForm.Show(mDockPanel);
             mDataForm.Show(mDockPanel);
             mStructureForm.Show(mDockPanel);
             mPropertyForm.Show(mDockPanel);
+            mCaptureControlPanel.Show(mDockPanel, DockState.DockLeft);
+            
             DockPane rightPane1 = new DockPane(mStructureForm, DockState.DockRight, true);
             DockPane rightPane2 = new DockPane(mPropertyForm, DockState.DockRight, true);
             rightPane1.Show();
@@ -558,6 +585,75 @@ namespace NCShark
 
             if (currentSession != null)
                 currentSession.Show(mDockPanel, DockState.Document);
+        }
+
+        /// <summary>
+        /// Evento chamado quando uma regra de filtro é aplicada
+        /// </summary>
+        private void OnFilterRuleApplied(object sender, FilterRuleEventArgs e)
+        {
+            // Atualizar propriedades do pacote baseado na ação da regra
+            switch (e.Rule.Action)
+            {
+                case FilterAction.Highlight:
+                    e.Packet.IsHighlighted = true;
+                    break;
+                case FilterAction.Ignore:
+                    e.Packet.IsIgnored = true;
+                    break;
+                case FilterAction.Modify:
+                    e.Packet.IsModified = true;
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Alterna entre modo de captura universal e modo restrito
+        /// </summary>
+        public void ToggleUniversalCaptureMode()
+        {
+            universalCaptureMode = !universalCaptureMode;
+            SetupAdapter();
+        }
+
+        /// <summary>
+        /// Obtém o gerenciador de regras de filtro
+        /// </summary>
+        public FilterRuleManager FilterRuleManager => filterRuleManager;
+
+        /// <summary>
+        /// Obtém se está em modo de captura universal
+        /// </summary>
+        public bool IsUniversalCaptureMode => universalCaptureMode;
+
+        /// <summary>
+        /// Adiciona uma sessão ativa
+        /// </summary>
+        public void AddActiveSession(SessionForm session)
+        {
+            if (!activeSessions.Contains(session))
+            {
+                activeSessions.Add(session);
+            }
+        }
+
+        /// <summary>
+        /// Remove uma sessão ativa
+        /// </summary>
+        public void RemoveActiveSession(SessionForm session)
+        {
+            if (activeSessions.Contains(session))
+            {
+                activeSessions.Remove(session);
+            }
+        }
+
+        /// <summary>
+        /// Obtém todas as sessões ativas
+        /// </summary>
+        public List<SessionForm> GetActiveSessions()
+        {
+            return new List<SessionForm>(activeSessions);
         }
     }
 }

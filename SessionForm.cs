@@ -1,4 +1,4 @@
-﻿//NCShark - By AlSch092 @ Github, thanks to @Diamondo25 for MapleShark
+//NCShark - By AlSch092 @ Github, thanks to @Diamondo25 for MapleShark
 using PacketDotNet;
 using System;
 using System.Collections.Generic;
@@ -68,6 +68,7 @@ namespace NCShark
         public ListView ListView { get { return mPacketList; } }
         public byte Locale { get { return mLocale; } }
         public List<Pair<bool, ushort>> Opcodes { get { return mOpcodes; } }
+        public List<NCPacket> Packets { get { return mPackets; } }
 
         public bool Saved { get; private set; }
 
@@ -214,10 +215,32 @@ namespace NCShark
                     mOpcodes.Add(new Pair<bool, ushort>(packet.Outbound, packet.Opcode));
                 }
 
+                // Aplicar regras de filtro antes de processar o pacote
+                if (MainForm != null && MainForm.FilterRuleManager != null)
+                {
+                    MainForm.FilterRuleManager.ApplyRules(packet);
+                }
+
+                // Verificar se o pacote deve ser ignorado
+                if (packet.IsIgnored)
+                {
+                    return Results.Continue;
+                }
+
                 if (shouldLog)
                 {
                     mPacketList.Items.Add(packet);
                     mPackets.Add(packet);
+
+                    // Aplicar formatação visual baseada nas propriedades do pacote
+                    if (packet.IsHighlighted)
+                    {
+                        packet.BackColor = System.Drawing.Color.Yellow;
+                    }
+                    else if (packet.IsModified)
+                    {
+                        packet.BackColor = System.Drawing.Color.LightBlue;
+                    }
 
                     MainForm.SearchForm.RefreshOpcodes(true);
                 }
