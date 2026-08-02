@@ -22,7 +22,13 @@ namespace NCShark
         private DataForm mDataForm = new DataForm();
         private StructureForm mStructureForm = new StructureForm();
         private PropertyForm mPropertyForm = new PropertyForm();
-            
+        private long mTotalPacketsSeen = 0;          // total packets read from device (including filtered)
+        private long mTotalPacketsCaptured = 0;      // packets that matched the filter
+        private long mTotalSynPackets = 0;           // SYN packets matching game port
+        private long mTotalSessionsCreated = 0;      // sessions actually created
+        private long mTotalPacketsLogged = 0;        // packets actually added to session list
+        private System.Windows.Forms.ToolStripStatusLabel mStatusLabel = null;
+        private int mDebugPort1 = 0, mDebugPort2 = 0; // track most recent ports for debugging
         private string[] _startupArguments = null;
 
         public MainForm(string[] startupArguments)
@@ -37,6 +43,8 @@ namespace NCShark
         public DataForm DataForm { get { return mDataForm; } }
         public StructureForm StructureForm { get { return mStructureForm; } }
         public PropertyForm PropertyForm { get { return mPropertyForm; } }
+        public LibPcapLiveDevice CurrentDevice { get { return mDevice; } }
+        public SessionForm ActiveSession { get { return mDockPanel.ActiveDocument as SessionForm; } }
         public byte Locale { get { return (mDockPanel.ActiveDocument as SessionForm).Locale; } }
 
         PcapDevice device;
@@ -126,6 +134,14 @@ namespace NCShark
             }
 
             SetupAdapter();
+
+            // Create status bar for diagnostics
+            StatusStrip statusStrip = new StatusStrip();
+            mStatusLabel = new System.Windows.Forms.ToolStripStatusLabel();
+            mStatusLabel.Text = "Initializing...";
+            statusStrip.Items.Add(mStatusLabel);
+            this.Controls.Add(statusStrip);
+            UpdateDiagnosticLabel();
 
             mTimer.Enabled = true;
 
@@ -285,7 +301,76 @@ namespace NCShark
             else mPropertyForm.Hide();
         }
 
+        private void mSendPacketMenu_Click(object sender, EventArgs e)
+        {
+            SessionForm session = mDockPanel.ActiveDocument as SessionForm;
+            if (session == null)
+            {
+                MessageBox.Show("No active session.", "NCShark", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (session.ListView.SelectedItems.Count == 0)
+            {
+                MessageBox.Show("No packet selected. Please select a packet first.", "NCShark", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            NCPacket packet = session.ListView.SelectedItems[0] as NCPacket;
+            if (packet == null) return;
+
+            SendPacketForm sendForm = new SendPacketForm();
+            string filter = string.Format("tcp portrange {0}-{1}", Config.Instance.LowPort, Config.Instance.HighPort);
+            sendForm.SetDevice(mDevice, filter);
+            sendForm.LoadFromPacket(packet, session);
+            sendForm.Show();
+        }
+
         List<SessionForm> closes = new List<SessionForm>();
+
+        private void UpdateDiagnosticLabel()
+        {
+            if (mStatusLabel == null) return;
+            string deviceName = (mDevice != null && mDevice.Interface != null) ? mDevice.Interface.FriendlyName : "NONE";
+            string deviceStatus = (mDevice != null && mDevice.Opened) ? "OPEN" : "CLOSED";
+            string captureStatus = started ? "RUNNING" : "STOPPED";
+            mStatusLabel.Text = string.Format("Dev: {0} [{1}] | Ports {2}-{3} | {4} | Pkt: {5} tot, {6} match | SYN: {7} | Ses: {8} | Ex: {9}:{10}",
+                deviceName, deviceStatus, Config.Instance.LowPort, Config.Instance.HighPort,
+                captureStatus, mTotalPacketsSeen, mTotalPacketsCaptured,
+                mTotalSynPackets, mTotalSessionsCreated,
+                mDebugPort1, mDebugPort2);
+        }
+
+        /// <summary>
+        /// Helper to find a matching SessionForm in the DockPanel contents (not MdiChildren).
+        /// MdiChildren does NOT contain DockContent sessions managed by WeifenLuo DockPanel.
+        /// </summary>
+        private SessionForm FindSessionByPacket(TcpPacket pTCPPacket)
+        {
+            foreach (var content in mDockPanel.Contents)
+            {
+                SessionForm ses = content as SessionForm;
+                if (ses != null && ses.MatchTCPPacket(pTCPPacket))
+                    return ses;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Gets all SessionForm objects currently managed by the DockPanel.
+        /// </summary>
+        private List<SessionForm> GetSessions()
+        {
+            List<SessionForm> sessions = new List<SessionForm>();
+            foreach (var content in mDockPanel.Contents)
+            {
+                SessionForm ses = content as SessionForm;
+                if (ses != null)
+                    sessions.Add(ses);
+            }
+            return sessions;
+        }
+
         private void mTimer_Tick(object sender, EventArgs e)
         {
             try
@@ -294,7 +379,10 @@ namespace NCShark
                 mTimer.Enabled = false;
 
                 DateTime now = DateTime.Now;
-                foreach (SessionForm ses in MdiChildren) 
+
+                // Use DockPanel contents instead of MdiChildren (DockContent != MDI child)
+                List<SessionForm> activeSessions = GetSessions();
+                foreach (SessionForm ses in activeSessions)
                 {
                     if (ses.CloseMe(now))
                         closes.Add(ses);
@@ -302,67 +390,119 @@ namespace NCShark
                 closes.ForEach((a) => { a.Close(); });
                 closes.Clear();
 
+                if (mDevice == null || !mDevice.Opened)
+                {
+                    System.Diagnostics.Debug.WriteLine("[NCShark] Device not ready, skipping tick.");
+                    mTimer.Enabled = true;
+                    return;
+                }
+
                 while ((packet = mDevice.GetNextPacket()) != null) //get packet from device driver
                 {
-                    TcpPacket tcpPacket = TcpPacket.GetEncapsulated(Packet.ParsePacket(packet.LinkLayerType, packet.Data));
-                  
-                    var parentPacket = tcpPacket.ParentPacket as IPv4Packet; //extract info
+                    if (packet == null) continue;
+                    mTotalPacketsSeen++;
 
-                    if (parentPacket != null) //strip info from underlying tcp/ethernet packet if needed
+                    TcpPacket tcpPacket = TcpPacket.GetEncapsulated(Packet.ParsePacket(packet.LinkLayerType, packet.Data));
+                    if (tcpPacket == null) continue;
+
+                    // Track first few unique ports for debugging
+                    if (mTotalPacketsSeen <= 20 || mTotalPacketsCaptured == 0)
                     {
-                        // Now you have the source and destination IP addresses
-                        //Console.WriteLine($"Source IP: {sendForm.sourceIp}");
-                        //Console.WriteLine($"Destination IP: {sendForm.destIp}");
+                        mDebugPort1 = tcpPacket.SourcePort;
+                        mDebugPort2 = tcpPacket.DestinationPort;
                     }
-                    else
+
+                    // Check if this packet is on the game port range
+                    bool matchesPort = (tcpPacket.SourcePort >= Config.Instance.LowPort && tcpPacket.SourcePort <= Config.Instance.HighPort) ||
+                                       (tcpPacket.DestinationPort >= Config.Instance.LowPort && tcpPacket.DestinationPort <= Config.Instance.HighPort);
+                    if (!matchesPort)
                     {
-                        Console.WriteLine("Parent packet is not an IPv4 packet.");
+                        // For first 50 packets, count non-matching too for diagnostics
+                        if (mTotalPacketsSeen <= 50)
+                        {
+                            System.Diagnostics.Debug.WriteLine("[NCShark] Non-game packet: " + tcpPacket.SourcePort + " -> " + tcpPacket.DestinationPort);
+                        }
+                        continue;
                     }
+
+                    mTotalPacketsCaptured++;
 
                     SessionForm session = null;
+                    bool isNewSession = false;
+
                     try
                     {
-                        if (tcpPacket.Syn && !tcpPacket.Ack && tcpPacket.DestinationPort >= Config.Instance.LowPort && tcpPacket.DestinationPort <= Config.Instance.HighPort)
+                        // Try to find an existing session for this packet
+                        session = FindSessionByPacket(tcpPacket);
+
+                        // No session found — this could be:
+                        // 1. A new SYN packet (new connection)
+                        // 2. A data packet from an already-established connection (NCShark started mid-game)
+                        if (session == null)
                         {
                             session = NewSession();
+                            isNewSession = true;
 
-                            var res = session.BufferTCPPacket(tcpPacket, packet.Timeval.Date, started);
-                            if (res == SessionForm.Results.Continue)
+                            if (tcpPacket.Syn && !tcpPacket.Ack)
                             {
-                                session.Show(mDockPanel, DockState.Document);
+                                mTotalSynPackets++;
+                                System.Diagnostics.Debug.WriteLine("[NCShark] New SYN packet: " + tcpPacket.SourcePort + " -> " + tcpPacket.DestinationPort);
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine("[NCShark] New data session (mid-game start): " + tcpPacket.SourcePort + " -> " + tcpPacket.DestinationPort);
                             }
                         }
-                        else
-                        {
-                            session = Array.Find(MdiChildren, f => (f as SessionForm).MatchTCPPacket(tcpPacket)) as SessionForm;
-                            if (session != null)
-                            {
-                                var res = session.BufferTCPPacket(tcpPacket, packet.Timeval.Date, started);
 
-                               if (res == SessionForm.Results.CloseMe)
-                               {
-                                   session.Close();
-                               }
+                        if (session != null)
+                        {
+                            var res = session.BufferTCPPacket(tcpPacket, packet.Timeval.Date, started);
+
+                            if (isNewSession && res == SessionForm.Results.Continue)
+                            {
+                                mTotalSessionsCreated++;
+                                System.Diagnostics.Debug.WriteLine("[NCShark] Session shown: Port " + session.LocalPort + " -> " + session.RemotePort);
+                                session.Show(mDockPanel, DockState.Document);
+                            }
+
+                            if (res == SessionForm.Results.CloseMe)
+                            {
+                                session.Close();
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine(ex.ToString());
-                        session.Close();
+                        System.Diagnostics.Debug.WriteLine("[NCShark] Packet processing error: " + ex.ToString());
+                        if (session != null && isNewSession)
+                        {
+                            session.Close();
+                        }
                         session = null;
                     }
                 }
+
+                // Update diagnostic label periodically
+                if (mTotalPacketsSeen % 10 == 0 || mTotalPacketsCaptured > 0)
+                {
+                    UpdateDiagnosticLabel();
+                }
                 mTimer.Enabled = true;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                if (!mDevice.Opened)
-                    mDevice.Open(DeviceMode.Promiscuous, 1);
+                System.Diagnostics.Debug.WriteLine("[NCShark] Timer tick error: " + ex.ToString());
+                // CRITICAL: must re-enable timer even on exception, otherwise capture stops forever
+                if (mDevice != null && !mDevice.Opened)
+                {
+                    try { mDevice.Open(DeviceMode.Promiscuous, 1); }
+                    catch { System.Diagnostics.Debug.WriteLine("[NCShark] Failed to reopen device."); }
+                }
+                mTimer.Enabled = true; // ALWAYS re-enable timer
             }
         }
 
-        bool started = true;
+        private bool started = true; // Starts capturing immediately (packets visible from game start)
         private void toolStripButton1_Click(object sender, EventArgs e)
         {
             if (started)
@@ -377,6 +517,7 @@ namespace NCShark
                 //mStopStartButton.Image = Properties.Resources.Button_Blank_Red_icon;
                 mStopStartButton.Text = "Stop sniffing";
             }
+            UpdateDiagnosticLabel();
         }
 
         private void helpToolStripButton_Click(object sender, EventArgs e)
@@ -558,6 +699,38 @@ namespace NCShark
 
             if (currentSession != null)
                 currentSession.Show(mDockPanel, DockState.Document);
+        }
+
+        /// <summary>
+        /// Creates a SendPacketForm pre-populated with data from the active session's selected packet.
+        /// Called from SessionForm's "Resend packet" context menu.
+        /// </summary>
+        public void ShowSendPacketFormForSelectedPacket()
+        {
+            SessionForm session = mDockPanel.ActiveDocument as SessionForm;
+            if (session == null)
+            {
+                MessageBox.Show("No active session.", "NCShark", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            NCPacket packet = session.SelectedPacket;
+            if (packet == null)
+            {
+                MessageBox.Show("No packet selected.", "NCShark", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (mDevice == null)
+            {
+                MessageBox.Show("No capture device available. Please setup NCShark first.", "NCShark", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            SendPacketForm sendForm = new SendPacketForm();
+            sendForm.SetDevice(mDevice, mDevice.Filter);
+            sendForm.LoadFromPacket(packet, session);
+            sendForm.Show();
         }
     }
 }

@@ -1,0 +1,21 @@
+# Build output
+bin/
+obj/
+
+# NuGet packages (restore with: nuget.exe restore NCShark.sln)
+packages/
+
+# User/IDE files
+*.user
+*.suo
+.vs/
+
+# Build artifacts and logs
+build.log
+NCShark.Tests.exe
+
+# NuGet CLI
+nuget.exe
+
+# Runtime-generated
+NCShark Error.txt

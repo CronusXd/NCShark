@@ -24,10 +24,19 @@ namespace NCShark
 
             foreach (LibPcapLiveDevice device in LibPcapLiveDeviceList.Instance)
             {
+                if (device == null || device.Interface == null) continue;
+                if (device.Interface.Addresses == null) continue;
                 if (!device.Interface.Addresses.Exists(a => a != null && a.Addr != null && a.Addr.ipAddress != null)) continue;
-                int index = mInterfaceCombo.Items.Add(device.Interface.FriendlyName);
-                if (device.Interface.FriendlyName == "Local Area Connection") localAreaConnection = index;
-                if (!selected && (selected = (device.Interface.FriendlyName == Config.Instance.Interface))) mInterfaceCombo.SelectedIndex = index;
+                string friendlyName = device.Interface.FriendlyName;
+                if (string.IsNullOrEmpty(friendlyName)) continue;
+                int index = mInterfaceCombo.Items.Add(friendlyName);
+                if (friendlyName == "Local Area Connection") localAreaConnection = index;
+                if (!selected && (selected = (friendlyName == Config.Instance.Interface))) mInterfaceCombo.SelectedIndex = index;
+            }
+
+            if (mInterfaceCombo.Items.Count == 0)
+            {
+                mInterfaceCombo.Items.Add("(Nenhum adaptador encontrado - instale WinPcap/Npcap)");
             }
 
             if (!selected && localAreaConnection >= 0) mInterfaceCombo.SelectedIndex = localAreaConnection;

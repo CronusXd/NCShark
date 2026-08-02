@@ -81,6 +81,7 @@ namespace NCShark
             }
 
             def.Locale = pLocale;
+            def.Build = pBuild;
             def.Opcode = pOpcode;
             def.Outbound = pOutbound;
             def.Name = pName;

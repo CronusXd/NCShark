@@ -1,6 +1,7 @@
 ﻿//NCShark - By AlSch092 @ Github, thanks to @Diamondo25 for MapleShark
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -18,14 +19,42 @@ namespace NCShark
         public ushort Opcode { get; private set; }
         public new string Name { set { SubItems[4].Text = value; } }
 
-        public byte[] Buffer { get; private set; }
+        public byte[] Buffer { get; set; }
         public int Cursor { get; private set; }
         public int Length { get { return Buffer.Length; } }
         public int Remaining { get { return Length - Cursor; } }
         public uint PreDecodeIV { get; private set; }
         public uint PostDecodeIV { get; private set; }
+        /// <summary>
+        /// Stores the XOR key-table index at which this packet's payload data begins.
+        /// Captured during live sniffing; used by SendPacketForm to re-encrypt before resend.
+        /// Value of 0 means unknown/unset (fallback: use isFirstSend=true).
+        /// </summary>
+        public ulong XorCount { get; set; }
 
-        internal NCPacket(DateTime pTimestamp, bool pOutbound, ushort pOpcode, string pName, byte[] pBuffer)
+        /// <summary>
+        /// The full TCP payload exactly as captured on the wire (still XOR-encrypted,
+        /// including the 2-byte protocol header). Stored so a replay can recover the
+        /// header bytes that the logging pipeline strips. Null for packets that were
+        /// never captured live (e.g. old .msb files without the field).
+        /// </summary>
+        public byte[] RawPayload { get; set; }
+
+        private bool _edited = false;
+        public bool Edited
+        {
+            get { return _edited; }
+            set
+            {
+                _edited = value;
+                if (value)
+                    this.BackColor = Color.LightYellow;
+                else
+                    this.BackColor = SystemColors.Window;
+            }
+        }
+
+        public NCPacket(DateTime pTimestamp, bool pOutbound, ushort pOpcode, string pName, byte[] pBuffer)
             : base(new string[] {
                 pTimestamp.ToString("yyyy-MM-dd HH:mm:ss.fff"),
                 pOutbound ? "Outbound" : "Inbound",
@@ -41,7 +70,7 @@ namespace NCShark
 
         }
 
-        internal NCPacket(DateTime pTimestamp, ushort pOpcode, string pName, byte[] pBuffer)
+        public NCPacket(DateTime pTimestamp, ushort pOpcode, string pName, byte[] pBuffer)
             : base(new string[] {
                 pTimestamp.ToString("yyyy-MM-dd HH:mm:ss.fff"),
                 pBuffer.Length.ToString(),

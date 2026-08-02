@@ -48,5 +48,43 @@ namespace NCShark
         {
             MainForm.CopyPacketHex(pArgs);
         }
+
+        private void btnApplyChanges_Click(object sender, EventArgs e)
+        {
+            if (MainForm == null) return;
+
+            SessionForm session = MainForm.ActiveSession;
+            if (session == null)
+            {
+                MessageBox.Show("No active session.", "NCShark", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            NCPacket packet = session.SelectedPacket;
+            if (packet == null)
+            {
+                MessageBox.Show("No packet selected.", "NCShark", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            DynamicByteProvider provider = mHex.ByteProvider as DynamicByteProvider;
+            if (provider == null) return;
+
+            // Read current bytes from HexBox and update the NCPacket buffer
+            byte[] editedBytes = provider.Bytes.ToArray();
+            packet.Buffer = editedBytes;
+            packet.Edited = true;
+
+            // Update any open SendPacketForm that was loaded from this packet's session
+            foreach (Form form in Application.OpenForms)
+            {
+                SendPacketForm sendForm = form as SendPacketForm;
+                if (sendForm != null && !form.IsDisposed)
+                {
+                    // Re-read the buffer from the updated NCPacket
+                    sendForm.RefreshPacketData(packet);
+                }
+            }
+        }
     }
 }

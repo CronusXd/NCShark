@@ -30,6 +30,9 @@ namespace NCShark
         private void InitializeComponent()
         {
             this.mHex = new System.Windows.Forms.HexBox();
+            this.panelActions = new System.Windows.Forms.Panel();
+            this.btnApplyChanges = new System.Windows.Forms.Button();
+            this.panelActions.SuspendLayout();
             this.SuspendLayout();
             // 
             // mHex
@@ -40,7 +43,7 @@ namespace NCShark
             this.mHex.LineInfoVisible = true;
             this.mHex.Location = new System.Drawing.Point(0, 0);
             this.mHex.Name = "mHex";
-            this.mHex.ReadOnly = true;
+            this.mHex.ReadOnly = false;
             this.mHex.SelectionBackColor = System.Drawing.Color.Black;
             this.mHex.ShadowSelectionColor = System.Drawing.Color.FromArgb(((int)(((byte)(100)))), ((int)(((byte)(60)))), ((int)(((byte)(188)))), ((int)(((byte)(255)))));
             this.mHex.Size = new System.Drawing.Size(613, 147);
@@ -51,12 +54,33 @@ namespace NCShark
             this.mHex.SelectionLengthChanged += new System.EventHandler(this.mHex_SelectionLengthChanged);
             this.mHex.KeyDown += new System.Windows.Forms.KeyEventHandler(this.mHex_KeyDown);
             // 
+            // panelActions
+            // 
+            this.panelActions.Controls.Add(this.btnApplyChanges);
+            this.panelActions.Dock = System.Windows.Forms.DockStyle.Bottom;
+            this.panelActions.Location = new System.Drawing.Point(0, 147);
+            this.panelActions.Name = "panelActions";
+            this.panelActions.Size = new System.Drawing.Size(613, 28);
+            this.panelActions.TabIndex = 3;
+            // 
+            // btnApplyChanges
+            // 
+            this.btnApplyChanges.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnApplyChanges.Location = new System.Drawing.Point(521, 3);
+            this.btnApplyChanges.Name = "btnApplyChanges";
+            this.btnApplyChanges.Size = new System.Drawing.Size(89, 23);
+            this.btnApplyChanges.TabIndex = 4;
+            this.btnApplyChanges.Text = "Apply Changes";
+            this.btnApplyChanges.UseVisualStyleBackColor = true;
+            this.btnApplyChanges.Click += new System.EventHandler(this.btnApplyChanges_Click);
+            // 
             // DataForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(613, 147);
+            this.ClientSize = new System.Drawing.Size(613, 175);
             this.Controls.Add(this.mHex);
+            this.Controls.Add(this.panelActions);
             this.DockAreas = ((WeifenLuo.WinFormsUI.Docking.DockAreas)(((((WeifenLuo.WinFormsUI.Docking.DockAreas.Float | WeifenLuo.WinFormsUI.Docking.DockAreas.DockLeft)
                         | WeifenLuo.WinFormsUI.Docking.DockAreas.DockRight)
                         | WeifenLuo.WinFormsUI.Docking.DockAreas.DockTop)
@@ -66,6 +90,7 @@ namespace NCShark
             this.Name = "DataForm";
             this.ShowHint = WeifenLuo.WinFormsUI.Docking.DockState.DockBottom;
             this.Text = "Data";
+            this.panelActions.ResumeLayout(false);
             this.ResumeLayout(false);
 
         }
@@ -73,5 +98,7 @@ namespace NCShark
         #endregion
 
         private System.Windows.Forms.HexBox mHex;
+        private System.Windows.Forms.Panel panelActions;
+        private System.Windows.Forms.Button btnApplyChanges;
     }
 }

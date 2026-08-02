@@ -61,6 +61,8 @@ namespace NCShark
             this.mViewDataMenu = new System.Windows.Forms.ToolStripMenuItem();
             this.mViewStructureMenu = new System.Windows.Forms.ToolStripMenuItem();
             this.mViewPropertiesMenu = new System.Windows.Forms.ToolStripMenuItem();
+            this.toolStripSeparatorSendPacket = new System.Windows.Forms.ToolStripSeparator();
+            this.mSendPacketMenu = new System.Windows.Forms.ToolStripMenuItem();
             this.mTimer = new System.Windows.Forms.Timer(this.components);
             this.mImportDialog = new System.Windows.Forms.OpenFileDialog();
             this.mOpenDialog = new System.Windows.Forms.OpenFileDialog();
@@ -161,7 +163,9 @@ namespace NCShark
             this.mViewSearchMenu,
             this.mViewDataMenu,
             this.mViewStructureMenu,
-            this.mViewPropertiesMenu});
+            this.mViewPropertiesMenu,
+            this.toolStripSeparatorSendPacket,
+            this.mSendPacketMenu});
             this.mViewMenu.Name = "mViewMenu";
             this.mViewMenu.Size = new System.Drawing.Size(44, 20);
             this.mViewMenu.Text = "&View";
@@ -210,6 +214,19 @@ namespace NCShark
             this.mViewPropertiesMenu.Size = new System.Drawing.Size(152, 22);
             this.mViewPropertiesMenu.Text = "&Properties";
             this.mViewPropertiesMenu.CheckedChanged += new System.EventHandler(this.mViewPropertiesMenu_CheckedChanged);
+            // 
+            // toolStripSeparatorSendPacket
+            // 
+            this.toolStripSeparatorSendPacket.Name = "toolStripSeparatorSendPacket";
+            this.toolStripSeparatorSendPacket.Size = new System.Drawing.Size(149, 6);
+            // 
+            // mSendPacketMenu
+            // 
+            this.mSendPacketMenu.Name = "mSendPacketMenu";
+            this.mSendPacketMenu.ShortcutKeys = ((System.Windows.Forms.Keys)(System.Windows.Forms.Keys.F8));
+            this.mSendPacketMenu.Size = new System.Drawing.Size(152, 22);
+            this.mSendPacketMenu.Text = "Send Packet";
+            this.mSendPacketMenu.Click += new System.EventHandler(this.mSendPacketMenu_Click);
             // 
             // mTimer
             // 
@@ -412,6 +429,8 @@ namespace NCShark
         private System.Windows.Forms.ToolStripMenuItem setupToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator4;
         private System.Windows.Forms.ToolStripMenuItem importMSnifferToolStripMenuItem;
+        private System.Windows.Forms.ToolStripSeparator toolStripSeparatorSendPacket;
+        private System.Windows.Forms.ToolStripMenuItem mSendPacketMenu;
     }
 }
 

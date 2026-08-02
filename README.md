@@ -1,30 +1,45 @@
 # NCShark: PCap Packet Logger for Night Crows
 
-![NC_PE](https://github.com/AlSch092/NCShark/assets/94417808/eb842b79-e40a-47c9-8a90-15af04430b99)
-
-## Credits
-- AlSch092 @ Github for porting to Night Crows Global
+# Credits
+- AlSch092 @ Github
 - Diamondo25 @ Github for MapleShark
 
-## What is this?
-NCShark is a pcap driver powered packet logging tool made in C# (fork of MapleShark) for the game Night Crows. This program bypasses any anti-cheat mechanisms to bring you ban-free data logging. All game packet payloads are Protobuf structures, which means they must be deserialized in order to properly interpret parameter field values.
+# What is this?
+NCShark is a pcap driver powered packet logging tool made in C# (fork of MapleShark) for the game Night Crows. This program bypasses any anti-cheat mechanisms to bring you ban-free data logging.
 
-## Requirements
-- You must have WinPCap drivers installed
-- Proxy/VPN must be turned off while using this program (unless you know how to set this up properly)
-
-## How to Use
-Open NCShark.exe after ensuring WinPCap drivers are installed. Under File -> NCShark Setup, select your wireless or ethernet interface, and leave the rest of the defaults. Click 'OK' and then enter in-game and if all is correct, a new logging session should be created.
+**This fork additionally enables reading, editing and re-sending packets** (the upstream project disables sending to prevent general abuse).
 
 ## Features
-- Full outbound and inbound data logging
-- Ignoring inbound or outbound data for times of high traffic
-- Data converter: highlighting bytes with the mouse will display their values as byte, short, int, string, etc on the bottom-left docked pane.
-- Pcap session file loading: save and load .pcap files for further inspection
+
+- **Capture** all TCP traffic on the game port range (default `33004-35001`), grouped into sessions.
+- **Decode** the Night Crows XOR cipher and parse each packet's opcode (`Scripts/{locale}/{build}/PacketDefinitions.xml` maps opcodes to readable names).
+- **Edit** any packet's bytes in the hex editor (Data panel → "Apply Changes").
+- **Send / Replay** a captured (or edited) packet back onto the wire:
+  - View menu → *Send Packet* (F8), or right-click a packet → *Resend packet*.
+  - The resent payload is rebuilt with its protocol header and re-encrypted with the XOR key at the **current** stream position, so the server's cipher state accepts it.
+  - The replay uses an **isolated** cipher state — it never desynchronizes live capture decryption.
+  - Real MAC addresses are resolved automatically (capture adapter for source, ARP of the gateway/target for destination).
+  - TCP checksums and IP checksums are recomputed on send.
 
 ## Limitations
-- Data sending is not supported in this project to prevent general abuse towards the game servers
-- The program can become overwhelmed with data in areas of high inbound data activity (hundreds of entities moving nearby at once, for example)
-- A new session must be entered in-game to begin logging data due to the nature of the game's encryption method
-- Inbound packets above a certain length (1452 bytes) are fragmented by the game server and split into multiple chunks, and this program does not repack them into a single packet currently.
-- Protobuf contracts from the game are not included in this project, you can fork and add deserialization yourself if needed
+
+- **Stateful cipher:** because the XOR key advances with every byte, capturing mid-connection (without a SYN) cannot decode traffic, and any dropped packet desynchronizes decoding for the rest of the session. Start capture before the game connects for best results.
+- **Injection desyncs the connection:** injecting a packet advances the *server's* cipher state but not the *client's*, so a stateful session generally breaks after one injected packet. Replay works best for testing/crafting single packets.
+- The program can become overwhelmed with data in areas of high inbound data activity (hundreds of entities moving nearby at once, for example).
+
+## Building
+
+Requires NuGet packages (`packages.config`). Restore with `nuget.exe restore`, then build `NCShark.csproj` (x86 / .NET Framework 4.8).
+
+Run the test suite from `bin\x86\Debug`:
+```
+NCShark.Tests.exe
+```
+
+## .msb files
+
+Saved sessions now store the captured encrypted payload and XOR key position per packet (format `0x2026`), so packets can be replayed even after reloading a session file.
+
+# End note
+
+Inevitably there will be users who attempt to monetize this project by making 'object/entity scanners'. Do not pay for cheats: if you do you are being ripped off and are likely supporting criminals. Bots/cheats made by 99% of people will also get you banned as the cheat maker likely has no proper experience/no deep skill, and will likely put malware onto your computer. Just say no to buying cheats.

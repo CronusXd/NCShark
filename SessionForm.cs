@@ -57,17 +57,42 @@ namespace NCShark
         // Used for determining if the session did receive a packet at all, or if it just emptied its buffers
         public bool ClearedPackets { get; private set; }
 
+        private ToolStripMenuItem mPacketContextResendMenu;
+
         internal SessionForm()
         {
             ClearedPackets = false;
             InitializeComponent();
             Saved = false;
+
+            // Add "Resend packet" option to the packet list context menu (Fase G)
+            mPacketContextResendMenu = new ToolStripMenuItem("Resend packet");
+            mPacketContextResendMenu.Click += mPacketContextResendMenu_Click;
+            mPacketContextMenu.Items.Add(new ToolStripSeparator());
+            mPacketContextMenu.Items.Add(mPacketContextResendMenu);
         }
 
         public MainForm MainForm { get { return ParentForm as MainForm; } }
         public ListView ListView { get { return mPacketList; } }
         public byte Locale { get { return mLocale; } }
         public List<Pair<bool, ushort>> Opcodes { get { return mOpcodes; } }
+
+        // --- Session data exposed for SendPacketForm (Fase G) ---
+        public uint OutboundSequence { get { return mOutboundSequence; } }
+        public uint InboundSequence { get { return mInboundSequence; } }
+        public ushort LocalPort { get { return mLocalPort; } }
+        public ushort RemotePort { get { return mRemotePort; } }
+
+        /// <summary>Gets the currently selected NCPacket in the packet list, or null.</summary>
+        public NCPacket SelectedPacket
+        {
+            get
+            {
+                if (mPacketList.SelectedItems.Count > 0)
+                    return mPacketList.SelectedItems[0] as NCPacket;
+                return null;
+            }
+        }
 
         public bool Saved { get; private set; }
 
@@ -144,6 +169,49 @@ namespace NCShark
                     return Results.CloseMe;
                 }
             }
+            else if (mLocalPort == 0 && mRemotePort == 0)
+            {
+                // No SYN was captured (NCShark started mid-connection). Bind the session's
+                // endpoints from the first data packet so subsequent packets match this session.
+                // Heuristic: the endpoint inside the configured game port range is the remote
+                // (server) side; the client ephemeral port is the local side.
+                bool srcInRange = pTCPPacket.SourcePort >= Config.Instance.LowPort && pTCPPacket.SourcePort <= Config.Instance.HighPort;
+                bool dstInRange = pTCPPacket.DestinationPort >= Config.Instance.LowPort && pTCPPacket.DestinationPort <= Config.Instance.HighPort;
+
+                if (dstInRange && !srcInRange)
+                {
+                    mLocalPort = (ushort)pTCPPacket.SourcePort;
+                    mRemotePort = (ushort)pTCPPacket.DestinationPort;
+                }
+                else
+                {
+                    mLocalPort = (ushort)pTCPPacket.DestinationPort;
+                    mRemotePort = (ushort)pTCPPacket.SourcePort;
+                }
+
+                Text = "Port " + mLocalPort + " - " + mRemotePort;
+                startTime = DateTime.Now;
+
+                try
+                {
+                    PacketDotNet.IPv4Packet ipv4 = (PacketDotNet.IPv4Packet)pTCPPacket.ParentPacket;
+                    if (dstInRange && !srcInRange)
+                    {
+                        mRemoteEndpoint = ipv4.DestinationAddress.ToString() + ":" + pTCPPacket.DestinationPort.ToString();
+                        mLocalEndpoint = ipv4.SourceAddress.ToString() + ":" + pTCPPacket.SourcePort.ToString();
+                    }
+                    else
+                    {
+                        mRemoteEndpoint = ipv4.SourceAddress.ToString() + ":" + pTCPPacket.SourcePort.ToString();
+                        mLocalEndpoint = ipv4.DestinationAddress.ToString() + ":" + pTCPPacket.DestinationPort.ToString();
+                    }
+                    Console.WriteLine("[CONNECTION] (mid-game) From {0} to {1}", mRemoteEndpoint, mLocalEndpoint);
+                }
+                catch
+                {
+                    // Endpoints stay as "???" — not fatal, the session can still log.
+                }
+            }
 
             if(pTCPPacket.SourcePort == mLocalPort && !loggingOutbound) //IGNORE OUTBOUND
                 return Results.Continue;
@@ -175,17 +243,28 @@ namespace NCShark
 
                     if(tcpData.Length >= 4)
                     {
+                        // Save XOR counter state BEFORE decryption so we can re-encrypt later
+                        ulong xorCountBefore = Cipher.xor_out.count;
+                        bool isThisFirst = firstSend_out;
+
                         Cipher.XorBytes(Cipher.xor_out, tcpDataDecrypted, tcpDataDecrypted.Length, firstSend_out);
                         firstSend_out = false;
+
+                        // Calculate the XOR table index where the payload data (after 2-byte header) begins
+                        // The first 2 bytes (header) are stripped from packet.Buffer, so the data in
+                        // tcpDataToLog starts at XOR key index (xorCountBefore + 2) % 0x40.
+                        // For firstSend: XorBytes resets count to 0 internally, so data starts at key[2].
+                        packet.XorCount = isThisFirst ? (ulong)2 : (xorCountBefore + 2) % 0x40;
                     }
 
                     ushort opcode = BitConverter.ToUInt16(tcpDataDecrypted, 2);
-                    Definition definition = Config.Instance.GetDefinition(false, opcode);
+                    Definition definition = Config.Instance.GetDefinition(true, opcode);
 
                     byte[] tcpDataToLog = new byte[tcpData.Length - 2];
                     Buffer.BlockCopy(tcpDataDecrypted, 2, tcpDataToLog, 0, tcpData.Length - 2);
 
                     packet = new NCPacket(pArrivalTime, true, opcode, definition == null ? "" : definition.Name, tcpDataToLog);
+                    packet.RawPayload = (byte[])tcpData.Clone();
                     
                 }
                 else //INBOUND
@@ -195,8 +274,15 @@ namespace NCShark
 
                     if (tcpData.Length >= 4)
                     {
+                        // Save XOR counter state BEFORE decryption (inbound direction)
+                        ulong xorCountBefore = Cipher.xor_in.count;
+                        bool isThisFirst = firstSend_in;
+
                         Cipher.XorBytes(Cipher.xor_in, tcpDataDecrypted, tcpDataDecrypted.Length, firstSend_in);
                         firstSend_in = false;
+
+                        // Same offset calculation: 2 header bytes stripped → data starts at index+2
+                        packet.XorCount = isThisFirst ? (ulong)2 : (xorCountBefore + 2) % 0x40;
                     }
 
                     ushort opcode = BitConverter.ToUInt16(tcpDataDecrypted, 2);
@@ -207,6 +293,7 @@ namespace NCShark
 
                     //decrypt tcp data
                     packet = new NCPacket(pArrivalTime, false, opcode, definition == null ? "" : definition.Name, tcpDataToLog);
+                    packet.RawPayload = (byte[])tcpData.Clone();
                 }
 
                 if (!mOpcodes.Exists(kv => kv.First == packet.Outbound && kv.Second == packet.Opcode)) // Should be false, but w/e
@@ -216,11 +303,20 @@ namespace NCShark
 
                 if (shouldLog)
                 {
+                    // Use BeginUpdate/EndUpdate to prevent ListView flicker from rapid packet additions
+                    mPacketList.BeginUpdate();
                     mPacketList.Items.Add(packet);
                     mPackets.Add(packet);
+                    mPacketList.EndUpdate();
 
-                    MainForm.SearchForm.RefreshOpcodes(true);
+                    // Only refresh opcodes periodically (not on every packet) to reduce flicker
+                    if (mPackets.Count % 20 == 0 || mPackets.Count < 5)
+                    {
+                        MainForm.SearchForm.RefreshOpcodes(true);
+                    }
                 }
+
+                return Results.Continue; // BufferTCPPacket already parsed & logged this packet; skip redundant ProcessTCPPacket
             }
 
             if (pTCPPacket.SourcePort == mLocalPort)
@@ -403,6 +499,12 @@ namespace NCShark
 
                     Definition definition = Config.Instance.GetDefinition(outbound, opcode);
                     NCPacket packet = new NCPacket(new DateTime(timestamp), outbound, opcode, definition == null ? "" : definition.Name, buffer);
+                    if (MapleSharkVersion >= 0x2026)
+                    {
+                        packet.XorCount = reader.ReadUInt64();
+                        ushort rawLength = reader.ReadUInt16();
+                        packet.RawPayload = rawLength > 0 ? reader.ReadBytes(rawLength) : null;
+                    }
                     mPackets.Add(packet);
                     if (!mOpcodes.Exists(kv => kv.First == packet.Outbound && kv.Second == packet.Opcode)) mOpcodes.Add(new Pair<bool, ushort>(packet.Outbound, packet.Opcode));
                     if (definition != null && definition.Ignore) continue;
@@ -505,7 +607,7 @@ namespace NCShark
             }
             using (FileStream stream = new FileStream(mFilename, FileMode.Create, FileAccess.Write))
             {
-                var version = (ushort)0x2025;
+                var version = (ushort)0x2026;
 
                 BinaryWriter writer = new BinaryWriter(stream);
                 writer.Write(version);
@@ -524,10 +626,17 @@ namespace NCShark
                     writer.Write((ushort)p.Opcode);
                     writer.Write((byte)(p.Outbound ? 1 : 0));
                     writer.Write(p.Buffer);
-                    if (version == 0x2025)
+                    if (version >= 0x2025)
                     {
                         writer.Write(p.PreDecodeIV);
                         writer.Write(p.PostDecodeIV);
+                    }
+                    if (version >= 0x2026)
+                    {
+                        writer.Write((ulong)p.XorCount);
+                        byte[] raw = p.RawPayload ?? new byte[0];
+                        writer.Write((ushort)raw.Length);
+                        writer.Write(raw);
                     }
                 });
 
@@ -653,6 +762,13 @@ namespace NCShark
         }
 
         bool openingContextMenu = false;
+
+        /// <summary>Handler for the "Resend packet" context menu item.</summary>
+        private void mPacketContextResendMenu_Click(object sender, EventArgs e)
+        {
+            MainForm.ShowSendPacketFormForSelectedPacket();
+        }
+
         private void mPacketContextMenu_Opening(object pSender, CancelEventArgs pArgs)
         {
             openingContextMenu = true;
@@ -693,6 +809,7 @@ namespace NCShark
                     definition.Outbound = packet.Outbound;
                     definition.Opcode = packet.Opcode;
                     definition.Locale = mLocale;
+                    definition.Build = mBuild;
                 }
                 definition.Name = mPacketContextNameBox.Text;
                 DefinitionsContainer.Instance.SaveDefinition(definition);
@@ -713,10 +830,10 @@ namespace NCShark
             {
                 definition = new Definition();
                 definition.Locale = mLocale;
+                definition.Build = mBuild;
 
                 definition.Outbound = packet.Outbound;
                 definition.Opcode = packet.Opcode;
-                definition.Locale = mLocale;
             }
             definition.Ignore = mPacketContextIgnoreMenu.Checked;
             DefinitionsContainer.Instance.SaveDefinition(definition);
@@ -868,5 +985,17 @@ namespace NCShark
             RefreshPackets();
         }
 
+        /// <summary>
+        /// Called by SendPacketForm after a successful send to keep session sequence numbers in sync.
+        /// </summary>
+        /// <param name="outbound">True if the sent packet was outbound (local->remote), false for inbound (remote->local).</param>
+        /// <param name="payloadLength">Length of the TCP payload that was sent.</param>
+        public void NotifyPacketSent(bool outbound, int payloadLength)
+        {
+            if (outbound)
+                mOutboundSequence += (uint)payloadLength;
+            else
+                mInboundSequence += (uint)payloadLength;
+        }
     }
 }

@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<ArrayOfDefinition xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Definition>
+    <Locale>1</Locale>
+    <Build>1</Build>
+    <Outbound>false</Outbound>
+    <Opcode>100</Opcode>
+    <Name>EXAMPLE_OPCODE</Name>
+    <Ignore>false</Ignore>
+  </Definition>
+</ArrayOfDefinition>

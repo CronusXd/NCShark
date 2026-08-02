@@ -1,4 +1,5 @@
 ﻿//NCShark - By AlSch092 @ Github, thanks to @Diamondo25 for MapleShark
+using System;
 using System.Runtime.InteropServices;
 
 namespace NCShark
@@ -19,6 +20,49 @@ namespace NCShark
 
         public static XorKeyLookup xor_out = new XorKeyLookup();
         public static XorKeyLookup xor_in = new XorKeyLookup();
+
+        /// <summary>Number of header bytes that precede the opcode in a decrypted packet.</summary>
+        public const int HeaderSize = 2;
+
+        /// <summary>
+        /// Returns the XOR key byte at the given stream index (the counter wraps at 0x40).
+        /// </summary>
+        public static byte KeyByte(ulong index)
+        {
+            return NCXorkeyTable[index % 0x40];
+        }
+
+        /// <summary>
+        /// Rebuilds the full on-wire payload for a packet replay.
+        ///
+        /// The captured payload was decrypted by XORing the whole stream (including the
+        /// 2-byte header) sequentially from a historical key index. This method recovers
+        /// the plaintext header bytes from the original encrypted bytes, re-attaches the
+        /// caller-provided plaintext data, and re-encrypts everything from <paramref name="startKey"/>.
+        ///
+        /// A dedicated local XorKeyLookup is used so the live capture cipher state
+        /// (Cipher.xor_out / Cipher.xor_in) is never mutated by a replay.
+        /// </summary>
+        /// <param name="rawPayload">Full encrypted payload exactly as captured on the wire.</param>
+        /// <param name="xorCount">Key index where the logged (plaintext) data begins in the capture.</param>
+        /// <param name="plaintextData">Plaintext opcode+data bytes (may have been edited).</param>
+        /// <param name="startKey">Key index the server currently expects for the next client packet.</param>
+        public static byte[] BuildReplayPayload(byte[] rawPayload, ulong xorCount, byte[] plaintextData, ulong startKey)
+        {
+            byte[] plain = new byte[HeaderSize + plaintextData.Length];
+
+            // Recover the plaintext header from the captured bytes: encrypted ^ historical key.
+            ulong headerStartHist = (xorCount + 0x40 - HeaderSize) % 0x40;
+            for (int i = 0; i < HeaderSize && i < rawPayload.Length; i++)
+                plain[i] = (byte)(rawPayload[i] ^ KeyByte((headerStartHist + (ulong)i) % 0x40));
+
+            Buffer.BlockCopy(plaintextData, 0, plain, HeaderSize, plaintextData.Length);
+
+            // Encrypt the whole plaintext payload from the current key position.
+            var replayKey = new XorKeyLookup { count = startKey };
+            XorBytes(replayKey, plain, plain.Length, false);
+            return plain;
+        }
 
         public unsafe static void XorBytes(XorKeyLookup keytable, byte[] buffer, int length, bool firstSend)
         {

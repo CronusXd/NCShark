@@ -19,21 +19,33 @@ namespace NCShark
 
         public Definition GetDefinition(ushort pOpcode, bool pOutbound)
         {
-            return null;
+            foreach (var localeKvp in _definitions)
+            {
+                foreach (var buildKvp in localeKvp.Value)
+                {
+                    Definition found = buildKvp.Value.Find(d => d.Outbound == pOutbound && d.Opcode == pOpcode);
+                    if (found != null)
+                        return found;
+                }
+            }
 
-            //return _definitions[pOpcode].Find(d => { return d.Outbound == pOutbound && d.Opcode == pOpcode; });
+            return null;
         }
 
         public void SaveDefinition(Definition pDefinition)
         {
-            //if (!_definitions.ContainsKey(pDefinition.Locale)) _definitions.Add(pDefinition.Locale, new Dictionary<ushort, List<Definition>>());
-            //if (!_definitions[pDefinition.Locale].ContainsKey(pDefinition.Build)) _definitions[pDefinition.Locale].Add(pDefinition.Build, new List<Definition>());
+            if (!_definitions.ContainsKey(pDefinition.Locale))
+                _definitions.Add(pDefinition.Locale, new Dictionary<ushort, List<Definition>>());
 
-            //_definitions[pDefinition.Locale][pDefinition.Build].RemoveAll(d => {
-            //    return d.Outbound == pDefinition.Outbound && d.Opcode == pDefinition.Opcode;
-            //});
+            if (!_definitions[pDefinition.Locale].ContainsKey(pDefinition.Build))
+                _definitions[pDefinition.Locale].Add(pDefinition.Build, new List<Definition>());
 
-            //_definitions[pDefinition.Locale][pDefinition.Build].Add(pDefinition);
+            _definitions[pDefinition.Locale][pDefinition.Build].RemoveAll(d =>
+            {
+                return d.Outbound == pDefinition.Outbound && d.Opcode == pDefinition.Opcode;
+            });
+
+            _definitions[pDefinition.Locale][pDefinition.Build].Add(pDefinition);
         }
 
         public static void Load()
@@ -126,14 +138,14 @@ namespace NCShark
                         if (d.Opcode == 0xFFFF) return;
                         byte outbound = (byte)(d.Outbound ? 1 : 0);
 
-                        //if (!headerList[outbound].ContainsKey(d.Locale))
-                        //    headerList[outbound].Add(d.Locale, new Dictionary<ushort, SortedDictionary<ushort, string>>());
-                        //if (!headerList[outbound][d.Locale].ContainsKey(d.Build))
-                        //    headerList[outbound][d.Locale].Add(d.Build, new SortedDictionary<ushort, string>());
-                        //if (!headerList[outbound][d.Locale][d.Build].ContainsKey(d.Opcode))
-                        //    headerList[outbound][d.Locale][d.Build].Add(d.Opcode, d.Name);
-                        //else
-                        //    headerList[outbound][d.Locale][d.Build][d.Opcode] = d.Name;
+                        if (!headerList[outbound].ContainsKey(d.Locale))
+                            headerList[outbound].Add(d.Locale, new Dictionary<ushort, SortedDictionary<ushort, string>>());
+                        if (!headerList[outbound][d.Locale].ContainsKey(d.Build))
+                            headerList[outbound][d.Locale].Add(d.Build, new SortedDictionary<ushort, string>());
+                        if (!headerList[outbound][d.Locale][d.Build].ContainsKey(d.Opcode))
+                            headerList[outbound][d.Locale][d.Build].Add(d.Opcode, d.Name);
+                        else
+                            headerList[outbound][d.Locale][d.Build][d.Opcode] = d.Name;
                     }
                 }
             }

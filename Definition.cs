@@ -3,7 +3,8 @@ namespace NCShark
 {
     public sealed class Definition
     {
-		public byte Locale = 0;
+        public byte Locale = 0;
+        public ushort Build = 0;
         public bool Outbound = false;
         public ushort Opcode = 0;
         public string Name = "";

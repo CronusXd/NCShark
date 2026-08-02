@@ -47,8 +47,11 @@ namespace NCShark
                 return null;
             }
 
-            int packetSize = this.mBuffer.Length;//mAES.GetHeaderLength(mBuffer, 0, pBuild == 255 && pLocale == 1); //Modify here 
+            int packetSize = BitConverter.ToInt32(mBuffer, 0); // Read 4-byte length prefix from the stream
             
+            if (packetSize <= 0 || packetSize > mBuffer.Length - 4)
+                return null;
+
             if (mCursor < (packetSize + 4))
             {
                 Console.WriteLine("Called Read RET 2");
@@ -56,7 +59,7 @@ namespace NCShark
             }
 
             byte[] packetBuffer = new byte[packetSize];
-            Buffer.BlockCopy(mBuffer, 5, packetBuffer, 0, packetSize);
+            Buffer.BlockCopy(mBuffer, 4, packetBuffer, 0, packetSize);
 
             mCursor -= (packetSize + 4);
             if (mCursor > 0) Buffer.BlockCopy(mBuffer, packetSize + 4, mBuffer, 0, mCursor);
